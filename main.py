@@ -7,16 +7,23 @@ print(train_claim)
 train_stance = pd.read_json("data/English_train.json", orient='records', lines=True)
 print(train_stance)
 
-def deEmojify(input):
+def cleanup_string(string):
+    string = string.encode('ascii', 'ignore').decode('ascii')
+    return string
+
+def cleanup_object(input):
     if isinstance(input, str):
-        return input.encode('ascii', 'ignore').decode('ascii')
+        return cleanup_string(input)
     elif isinstance(input, list):
-        return [deEmojify(item) for item in input]
+        return [cleanup_object(item) for item in input]
     else:
         return input
 
-for col in train_stance.columns:
-    if train_stance[col].dtype == object:
-        train_stance[col] = train_stance[col].apply(deEmojify)
+def cleanup_dataframe(df):
+    for col in df.columns:
+        df[col] = df[col].apply(cleanup_object)
+
+cleanup_dataframe(train_claim)
+cleanup_dataframe(train_stance)
 
 train_stance.to_json("data/cleaned_train.json", orient='records', lines=True)
