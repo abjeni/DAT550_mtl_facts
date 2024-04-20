@@ -126,18 +126,26 @@ claim_devtest_set = data.get_devtest_claim(claim_dev_set.labels_to_text)
 
 stance_train_set = data.get_train_stance()
 stance_dev_set = data.get_dev_stance(stance_train_set.labels_to_text)
-print(stance_dev_set.sentences)
+
+print(claim_train_set.labels_to_text)
+print(claim_dev_set.labels_to_text)
+print(claim_devtest_set.labels_to_text)
+
+print(stance_train_set.labels_to_text)
+print(stance_dev_set.labels_to_text)
 
 # Assume tokenizer is already initialized
 tokenizer = BertTokenizerFast.from_pretrained('bert-base-uncased')
 
 # Data for Task 1: claim detection
-sentences_task1 = claim_dev_set.sentences
-labels_task1 = claim_dev_set.labels
+sentences_task1 = claim_train_set.sentences
+labels_task1 = claim_train_set.labels
+labels_num_task1 = len(claim_train_set.labels_to_text)
 
 # Data for Task 2: stance detection
-sentences_task2 = stance_dev_set.sentences
-labels_task2 = stance_dev_set.labels
+sentences_task2 = stance_train_set.sentences
+labels_task2 = stance_train_set.labels
+labels_num_task2 = len(stance_train_set.labels_to_text)
 
 # Tokenize and prepare datasets separately for each task
 inputs_task1 = tokenizer(sentences_task1, padding=True, truncation=True, return_tensors="pt")
@@ -152,7 +160,7 @@ dataloader_task1 = DataLoader(dataset_task1, batch_size=batch_size, shuffle=True
 dataloader_task2 = DataLoader(dataset_task2, batch_size=batch_size, shuffle=True)
 
 # Assume the MultiTaskBERT model is already defined and initialized
-model = MultiTaskBERT(num_labels_task1=2, num_labels_task2=4)  # Adjust num_labels_task2 as needed
+model = MultiTaskBERT(num_labels_task1=labels_num_task1, num_labels_task2=labels_num_task2)
 optimizer = optim.Adam(model.parameters(), lr=2e-5)
 
 # Training Loop Handling Different Sentences for Each Task
@@ -179,11 +187,11 @@ for epoch in range(3):  # Example: 3 epochs
 model.eval()
 
 # Synthetic Test Data for Task 1 (Sentiment Analysis) and Task 2 (Topic Classification)
-test_sentences_task1 = claim_devtest_set.sentences
-test_labels_task1 = claim_devtest_set.labels
+test_sentences_task1 = claim_dev_set.sentences
+test_labels_task1 = claim_dev_set.labels
 
-test_sentences_task2 = stance_train_set.sentences
-test_labels_task2 = stance_train_set.labels
+test_sentences_task2 = stance_dev_set.sentences
+test_labels_task2 = stance_dev_set.labels
 
 # Tokenizing test data for both tasks
 test_inputs_task1 = tokenizer(test_sentences_task1, return_tensors='pt', padding=True, truncation=True, max_length=512)
