@@ -116,11 +116,33 @@ class MultiTaskBERT(nn.Module):
 
 
 
+class TrainingSet:
+    def __init__(self, data_set, tokenizer):
+        self.size = len(data_set.labels_to_text)
+
+        # Tokenize and prepare datasets separately for each task
+        self.inputs = tokenizer(data_set.sentences, padding=True, truncation=True, return_tensors="pt")
+        self.labels = torch.tensor(data_set.labels)
+        self.dataset = TensorDataset(self.inputs.input_ids, self.inputs.attention_mask, self.labels)
+
+        # DataLoaders for each task
+        batch_size = 2
+        self.dataloader = DataLoader(self.dataset, batch_size=batch_size, shuffle=True)
+
+
+
+class TestSet:
+    def __init__(self, data_set, tokenizer):
+        # Tokenizing test data for each task
+        self.inputs = tokenizer(data_set.sentences, return_tensors='pt', padding=True, truncation=True, max_length=512)
+        self.labels = torch.tensor(data_set.labels)
+
+
+
 gpu = torch.device('cpu')
 
 data = Data()
 
-# i want to make sure to have equal ids for 
 claim_train_set = data.get_train_claim()
 claim_dev_set = data.get_dev_claim(claim_train_set.labels_to_text)
 claim_devtest_set = data.get_devtest_claim(claim_dev_set.labels_to_text)
@@ -139,29 +161,13 @@ print(stance_dev_set.labels_to_text)
 tokenizer = BertTokenizerFast.from_pretrained('bert-base-uncased')
 
 # Data for Task 1: claim detection
-sentences_task1 = claim_train_set.sentences
-labels_task1 = claim_train_set.labels
-labels_num_task1 = len(claim_train_set.labels_to_text)
+task1 = TrainingSet(claim_train_set, tokenizer)
 
 # Data for Task 2: stance detection
-sentences_task2 = stance_train_set.sentences
-labels_task2 = stance_train_set.labels
-labels_num_task2 = len(stance_train_set.labels_to_text)
-
-# Tokenize and prepare datasets separately for each task
-inputs_task1 = tokenizer(sentences_task1, padding=True, truncation=True, return_tensors="pt")
-inputs_task2 = tokenizer(sentences_task2, padding=True, truncation=True, return_tensors="pt")
-
-dataset_task1 = TensorDataset(inputs_task1.input_ids, inputs_task1.attention_mask, torch.tensor(labels_task1))
-dataset_task2 = TensorDataset(inputs_task2.input_ids, inputs_task2.attention_mask, torch.tensor(labels_task2))
-
-# DataLoaders for each task
-batch_size = 2
-dataloader_task1 = DataLoader(dataset_task1, batch_size=batch_size, shuffle=True)
-dataloader_task2 = DataLoader(dataset_task2, batch_size=batch_size, shuffle=True)
+task2 = TrainingSet(stance_train_set, tokenizer)
 
 # Assume the MultiTaskBERT model is already defined and initialized
-model = MultiTaskBERT(num_labels_task1=labels_num_task1, num_labels_task2=labels_num_task2)
+model = MultiTaskBERT(num_labels_task1=task1.size, num_labels_task2=task2.size)
 optimizer = optim.Adam(model.parameters(), lr=2e-5)
 
 def handle_task(model, optimizer, batch, task_num):
@@ -173,8 +179,8 @@ def handle_task(model, optimizer, batch, task_num):
 model.train() # enter training
 
 # Training Loop Handling Different Sentences for Each Task
-for epoch in range(10):  # Example: 3 epochs
-    for (batch1, batch2) in zip(dataloader_task1, dataloader_task2):
+for epoch in range(10):
+    for (batch1, batch2) in zip(task1.dataloader, task2.dataloader):
 
         optimizer.zero_grad()
         # Handle Task 1
@@ -190,31 +196,22 @@ for epoch in range(10):  # Example: 3 epochs
 model.eval() # enter evaluation/measurements
 
 # Synthetic Test Data for Task 1 (Claim Detection) and Task 2 (Stance Detection)
-test_sentences_task1 = claim_dev_set.sentences
-test_labels_task1 = claim_dev_set.labels
-
-test_sentences_task2 = stance_dev_set.sentences
-test_labels_task2 = stance_dev_set.labels
-
-# Tokenizing test data for both tasks
-test_inputs_task1 = tokenizer(test_sentences_task1, return_tensors='pt', padding=True, truncation=True, max_length=512)
-test_labels_task1 = torch.tensor(test_labels_task1)
-
-test_inputs_task2 = tokenizer(test_sentences_task2, return_tensors='pt', padding=True, truncation=True, max_length=512)
-test_labels_task2 = torch.tensor(test_labels_task2)
+test_task1 = TestSet(claim_dev_set, tokenizer)
+test_task2 = TestSet(stance_dev_set, tokenizer)
 
 def evaluate(model, inputs, labels, task):
     model.eval()  # Set model to evaluation mode
     with torch.no_grad():
-        logits = model(inputs['input_ids'], inputs['attention_mask'], task)
+        logits = model(inputs.input_ids, inputs.attention_mask, task)
         predictions = torch.argmax(torch.softmax(logits, dim=1), dim=1)
         accuracy = (predictions == labels).float().mean()
     return accuracy.item()
 
 # Evaluate Task 1 (Claim Detection)
-accuracy_task1 = evaluate(model, test_inputs_task1, test_labels_task1, task=1)
+accuracy_task1 = evaluate(model, test_task1.inputs, test_task1.labels, task=1)
 print(f"Task 1 (Claim Detection) Accuracy: {accuracy_task1:.4f}")
 
 # Evaluate Task 2 (Stance Detection)
-accuracy_task2 = evaluate(model, test_inputs_task2, test_labels_task2, task=2)
+accuracy_task2 = evaluate(model, test_task2.inputs, test_task2.labels, task=2)
 print(f"Task 2 (Stance Detection) Accuracy: {accuracy_task2:.4f}")
+
