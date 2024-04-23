@@ -41,19 +41,19 @@ class Data:
         self.train_stance = pd.read_csv("data/stance/cleaned_train.tsv", sep='\t')
         self.dev_stance = pd.read_csv("data/stance/cleaned_dev.tsv", sep='\t')
     
-    def get_train(self, df, labels2=[]):
+    def get_claim(self, df, labels2=[]):
         sentences = list(df["Text"])
         (labels, labels_to_text) = labelize(df["class_label"], labels2)
         return DataSet(sentences, labels, labels_to_text)
 
     def get_train_claim(self, labels=[]):
-        return self.get_train(self.train_claim, labels)
+        return self.get_claim(self.train_claim, labels)
 
     def get_dev_claim(self, labels=[]):
-        return self.get_train(self.dev_claim, labels)
+        return self.get_claim(self.dev_claim, labels)
 
     def get_devtest_claim(self, labels=[]):
-        return self.get_train(self.devtest_claim, labels)
+        return self.get_claim(self.devtest_claim, labels)
 
     def get_stance(self, df, labels2=[]):
         sentences = list(df["rumor"])
@@ -165,7 +165,7 @@ model = MultiTaskBERT(num_labels_task1=labels_num_task1, num_labels_task2=labels
 optimizer = optim.Adam(model.parameters(), lr=2e-5)
 
 def handle_task(model, optimizer, batch, task_num):
-    input_ids, attention_mask, labels = [item.to(device=gpu) for item in batch1]
+    input_ids, attention_mask, labels = [item.to(device=gpu) for item in batch]
     optimizer.zero_grad()
     logits = model(input_ids, attention_mask, task=task_num)
     loss = nn.CrossEntropyLoss()(logits, labels)
