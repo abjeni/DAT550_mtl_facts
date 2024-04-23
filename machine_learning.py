@@ -101,9 +101,8 @@ class MultiTaskBERT(nn.Module):
         - logits: Task-specific logits
         """
         outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
-        
-        pooled_output = outputs.pooler_output
-        pooled_output = self.dropout(pooled_output)
+
+        pooled_output = self.dropout(outputs.pooler_output) # zero out 10% of the output at random
         
         # Determine which task is being asked for and use the appropriate classifier
         if task == 1:
@@ -116,6 +115,8 @@ class MultiTaskBERT(nn.Module):
         return logits
 
 
+
+gpu = torch.device('cpu')
 
 data = Data()
 
@@ -163,22 +164,22 @@ dataloader_task2 = DataLoader(dataset_task2, batch_size=batch_size, shuffle=True
 model = MultiTaskBERT(num_labels_task1=labels_num_task1, num_labels_task2=labels_num_task2)
 optimizer = optim.Adam(model.parameters(), lr=2e-5)
 
+def handle_task(model, optimizer, batch, task_num):
+    input_ids, attention_mask, labels = [item.to(device=gpu) for item in batch1]
+    optimizer.zero_grad()
+    logits = model(input_ids, attention_mask, task=task_num)
+    loss = nn.CrossEntropyLoss()(logits, labels)
+    loss.backward()  # Accumulate gradients
+
 # Training Loop Handling Different Sentences for Each Task
 model.train()
 for epoch in range(3):  # Example: 3 epochs
     for (batch1, batch2) in zip(dataloader_task1, dataloader_task2):
         # Handle Task 1
-        input_ids, attention_mask, labels = [item.to('cpu') for item in batch1]
-        optimizer.zero_grad()
-        logits_task1 = model(input_ids, attention_mask, task=1)
-        loss_task1 = nn.CrossEntropyLoss()(logits_task1, labels)
-        loss_task1.backward()  # Accumulate gradients
+        handle_task(model, optimizer, batch1, 1)
 
         # Handle Task 2
-        input_ids, attention_mask, labels = [item.to('cpu') for item in batch2]
-        logits_task2 = model(input_ids, attention_mask, task=2)
-        loss_task2 = nn.CrossEntropyLoss()(logits_task2, labels)
-        loss_task2.backward()  # Accumulate gradients further
+        handle_task(model, optimizer, batch2, 2)
 
         optimizer.step()  # Perform optimization step for both tasks
 
