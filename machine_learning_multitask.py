@@ -147,6 +147,14 @@ class TestSet:
 
 class Processor:
     def __init__(self):
+        self.device = (
+            "cuda"
+            if torch.cuda.is_available()
+            else "mps"
+            if torch.backends.mps.is_available()
+            else "cpu"
+        )
+
         self.data = Data()
 
         self.tokenizer = BertTokenizerFast.from_pretrained('bert-base-uncased')
@@ -158,7 +166,7 @@ class Processor:
         self.optimizer = optim.Adam(self.model.parameters(), lr=2e-5)
         
     def handle_task(self, batch, task_num):
-        input_ids, attention_mask, labels = [item.to('cpu') for item in batch]
+        input_ids, attention_mask, labels = [item.to(device=self.device) for item in batch]
         logits = self.model(input_ids, attention_mask, task=task_num)
         loss = nn.CrossEntropyLoss()(logits, labels)
         loss.backward()  # Accumulate gradients
@@ -166,7 +174,7 @@ class Processor:
     def train_model(self):
         self.model.train() # enter training
 
-        for epoch in range(3):
+        for epoch in range(10):
             for (batch1, batch2) in zip(self.task1.dataloader, self.task2.dataloader):
                 self.optimizer.zero_grad()
                 self.handle_task(batch1, 1)
@@ -177,10 +185,10 @@ class Processor:
             
         self.model.eval() # exit training
 
-    def evaluate(self, inputs, labels, task):
+    def evaluate(self, inputs, labels, task_num):
         self.model.eval()
         with torch.no_grad():
-            logits = self.model(inputs.input_ids, inputs.attention_mask, task)
+            logits = self.model(inputs.input_ids, inputs.attention_mask, task=task_num)
             predictions = torch.argmax(torch.softmax(logits, dim=1), dim=1)
             accuracy = (predictions == labels).float().mean()
         return accuracy.item()
@@ -190,17 +198,25 @@ class Processor:
         test_task2 = TestSet(self.data.stance_dev_set, self.tokenizer)
 
         # Evaluate Task 1 (Claim Detection)
-        accuracy_task1 = self.evaluate(test_task1.inputs, test_task1.labels, task=1)
+        accuracy_task1 = self.evaluate(test_task1.inputs, test_task1.labels, 1)
         print(f"Task 1 (Claim Detection) Accuracy: {accuracy_task1:.4f}")
 
         # Evaluate Task 2 (Stance Detection)
-        accuracy_task2 = self.evaluate(test_task2.inputs, test_task2.labels, task=2)
+        accuracy_task2 = self.evaluate(test_task2.inputs, test_task2.labels, 2)
         print(f"Task 2 (Stance Detection) Accuracy: {accuracy_task2:.4f}")
-
+    
+    def model_save(self, path):
+        torch.save(self.model.state_dict(), path)
+    
+    def model_load(self, path):
+        self.model.load_state_dict(torch.load(path))
+        self.model.eval()
 
 
 
 if __name__ == "__main__":
     processor = Processor()
+    #processor.model_load("model.pt")
     processor.train_model()
-    processor.accurcy_test()
+    processor.model_save("model.pt")
+    processor.accuracy_test()
