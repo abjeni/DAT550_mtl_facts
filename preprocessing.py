@@ -1,9 +1,12 @@
-import re 
+import re
+import string
 
-def cleanup_string(string):
-    string = string.encode('ascii', 'ignore').decode('ascii')
-    string = re.sub(r'https\:\/\/\S+', '', string)
-    return string
+def cleanup_string(sentence):
+    sentence = sentence.encode('ascii', 'ignore').decode('ascii')
+    sentence = re.sub(r'https\:\/\/\S+', '', sentence)
+    
+    sentence = sentence.translate(str.maketrans('', '', string.punctuation))
+    return sentence
 
 def cleanup_object(input):
     if isinstance(input, str):

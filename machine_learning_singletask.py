@@ -74,9 +74,9 @@ class Data:
 
 
 
-class MultiTaskBERT(nn.Module):
+class SingleTaskBERT(nn.Module):
     def __init__(self, num_labels):
-        super(MultiTaskBERT, self).__init__()
+        super(SingleTaskBERT, self).__init__()
         self.bert = BertModel.from_pretrained('bert-base-uncased')
         
         # Task-specific layers
@@ -86,7 +86,7 @@ class MultiTaskBERT(nn.Module):
     def forward(self, input_ids, attention_mask):
         outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
         pooled_output = self.dropout(outputs.pooler_output) # zero out 10% of the output at random
-        logits = self.classifier_task(pooled_output)
+        logits = self.classifier(pooled_output)
         
         return logits
 
@@ -102,7 +102,7 @@ class TrainingSet:
         self.dataset = TensorDataset(self.inputs.input_ids, self.inputs.attention_mask, self.labels)
 
         # DataLoaders for each task
-        batch_size = 2
+        batch_size = 32
         self.dataloader = DataLoader(self.dataset, batch_size=batch_size, shuffle=True)
 
 
@@ -116,12 +116,10 @@ class TestSet:
 
 
 class Processor:
-    def __init__(self):
-        self.data = Data()
-
+    def __init__(self, training_set):
         self.tokenizer = BertTokenizerFast.from_pretrained('bert-base-uncased')
 
-        self.task = TrainingSet(self.data.claim_train_set, self.tokenizer)
+        self.task = TrainingSet(training_set, self.tokenizer)
 
         self.model = SingleTaskBERT(num_labels=self.task.size)
         self.optimizer = optim.Adam(self.model.parameters(), lr=2e-5)
@@ -136,7 +134,8 @@ class Processor:
         self.model.train() # enter training
 
         for epoch in range(10):
-            for (batch) in self.task.dataloader:
+            # zip with range(10) so the claim training doesn't take multiple hours
+            for batch, _ in zip(self.task.dataloader, range(10)):
                 self.optimizer.zero_grad()
                 self.handle_task(batch)
                 self.optimizer.step()
@@ -145,17 +144,17 @@ class Processor:
             
         self.model.eval() # exit training
 
-    def evaluate(self, inputs, labels):
+    def evaluate(self, test_set):
         self.model.eval()
         with torch.no_grad():
-            logits = self.model(inputs.input_ids, inputs.attention_mask)
+            logits = self.model(test_set.inputs.input_ids, test_set.inputs.attention_mask)
             predictions = torch.argmax(torch.softmax(logits, dim=1), dim=1)
-            accuracy = (predictions == labels).float().mean()
+            accuracy = (predictions == test_set.labels).float().mean()
         return accuracy.item()
 
-    def accuracy_test(self):
-        test = TestSet(self.data.claim_dev_set, self.tokenizer)
-        accuracy = self.evaluate(test.inputs)
+    def accuracy_test(self, test_set):
+        test = TestSet(test_set, self.tokenizer)
+        accuracy = self.evaluate(test)
         print(f"Accuracy: {accuracy:.4f}")
     
     def model_save(self, path):
@@ -168,8 +167,17 @@ class Processor:
 
 
 if __name__ == "__main__":
-    processor = Processor()
-    processor.model_load("model.pt")
-    #processor.train_model()
-    #processor.model_save("model.pt")
-    processor.accuracy_test()
+    data = Data()
+    print("Training stance")
+    processor = Processor(data.stance_train_set)
+    processor.train_model()
+    #processor.model_save("model_stance.pt")
+    #processor.model_load("model_stance.pt")
+    processor.accuracy_test(data.stance_dev_set)
+
+    print("Training claim")
+    processor = Processor(data.claim_train_set)
+    processor.train_model()
+    #processor.model_save("model_stance.pt")
+    #processor.model_load("model_stance.pt")
+    processor.accuracy_test(data.claim_dev_set)

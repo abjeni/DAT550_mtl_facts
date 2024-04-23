@@ -1,9 +1,13 @@
+# modified from
+# https://github.com/uis-no/dat550-2024/blob/main/handson_multitask_learning/multitask_train.py
+
 import torch
 from transformers import BertTokenizerFast, BertModel
 from torch.utils.data import DataLoader, TensorDataset, RandomSampler
 import torch.nn as nn
 import torch.optim as optim
 import pandas as pd
+import sys
 
 def labelize(labels, id_to_label=[]):
     label_to_id = dict()
@@ -203,20 +207,74 @@ class Processor:
     def model_load(self, path):
         self.model.load_state_dict(torch.load(path))
         self.model.eval()
+    
+    def take_user_input(self):
+        while True:
+            text = input("write a claim: ")
+            inputs = self.tokenizer([text], return_tensors='pt', padding=True, truncation=True, max_length=512)
+            output = self.model(inputs.input_ids, inputs.attention_mask, task=1)
+            claim_result = self.data.claim_train_set.get_label_text(int(torch.argmax(torch.softmax(output, dim=1), dim=1)[0]))
+            output = self.model(inputs.input_ids, inputs.attention_mask, task=2)
+            stance_result = self.data.stance_train_set.get_label_text(int(torch.argmax(torch.softmax(output, dim=1), dim=1)[0]))
 
+            print(f"claim detector label: {claim_result}")
+            print(f"stance detector label {stance_result}")
+
+            is_claim = False
+
+            if claim_result == "No":
+                is_claim = False
+            if claim_result == "Yes":
+                is_claim = True
+
+            is_fact = False
+
+            if is_fact == "REFUTES":
+                is_fact = False
+            if is_fact == "SUPPORTS":
+                is_fact = True
+            if is_fact == "NOT ENOUGH INFO":
+                is_fact = None
+            
+            if not is_claim:
+                print("The statement doesn't claim anything")
+            else:
+                if is_fact is True:
+                    print("The statement is True")
+                elif is_fact is False:
+                    print("The statement is False")
+                else:
+                    print("I don't know")
+            
+
+            
 
 
 if __name__ == "__main__":
+
+    args = dict()
+    args["train"] = False
+    args["save"] = False
+    args["load"] = False
+    args["accuracy"] = False
+    args["interactive"] = False
+
+    for arg in sys.argv:
+        args[arg] = True
+
     processor = Processor()
-    processor.model_load("model.pt")
 
-    while True:
-        text = input("write a claim: ")
-        print("is this a claim?")
-        inputs = processor.tokenizer([text], return_tensors='pt', padding=True, truncation=True, max_length=512)
-        output = processor.model(inputs.input_ids, inputs.attention_mask, task=1)
-        print(processor.data.claim_train_set.get_label_text(int(torch.argmax(torch.softmax(output, dim=1), dim=1)[0])))
+    if args["train"]:
+        processor.train_model()
+    
+    if args["save"]:
+        processor.model_save("model.pt")
 
-    #processor.train_model()
-    #processor.model_save("model.pt")
-    processor.accuracy_test()
+    if args["load"]:
+        processor.model_load("model.pt")
+    
+    if args["accuracy"]:
+        processor.accuracy_test()
+    
+    if args["interactive"]:
+        processor.take_user_input()
