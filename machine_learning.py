@@ -41,19 +41,19 @@ class Data:
         self.train_stance = pd.read_csv("data/stance/cleaned_train.tsv", sep='\t')
         self.dev_stance = pd.read_csv("data/stance/cleaned_dev.tsv", sep='\t')
     
-    def get_train(self, df, labels2=[]):
+    def get_claim(self, df, labels2=[]):
         sentences = list(df["Text"])
         (labels, labels_to_text) = labelize(df["class_label"], labels2)
         return DataSet(sentences, labels, labels_to_text)
 
     def get_train_claim(self, labels=[]):
-        return self.get_train(self.train_claim, labels)
+        return self.get_claim(self.train_claim, labels)
 
     def get_dev_claim(self, labels=[]):
-        return self.get_train(self.dev_claim, labels)
+        return self.get_claim(self.dev_claim, labels)
 
     def get_devtest_claim(self, labels=[]):
-        return self.get_train(self.devtest_claim, labels)
+        return self.get_claim(self.devtest_claim, labels)
 
     def get_stance(self, df, labels2=[]):
         sentences = list(df["rumor"])
@@ -101,9 +101,8 @@ class MultiTaskBERT(nn.Module):
         - logits: Task-specific logits
         """
         outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
-        
-        pooled_output = outputs.pooler_output
-        pooled_output = self.dropout(pooled_output)
+
+        pooled_output = self.dropout(outputs.pooler_output) # zero out 10% of the output at random
         
         # Determine which task is being asked for and use the appropriate classifier
         if task == 1:
@@ -116,6 +115,8 @@ class MultiTaskBERT(nn.Module):
         return logits
 
 
+
+gpu = torch.device('cpu')
 
 data = Data()
 
@@ -163,30 +164,32 @@ dataloader_task2 = DataLoader(dataset_task2, batch_size=batch_size, shuffle=True
 model = MultiTaskBERT(num_labels_task1=labels_num_task1, num_labels_task2=labels_num_task2)
 optimizer = optim.Adam(model.parameters(), lr=2e-5)
 
+def handle_task(model, optimizer, batch, task_num):
+    input_ids, attention_mask, labels = [item.to(device=gpu) for item in batch]
+    logits = model(input_ids, attention_mask, task=task_num)
+    loss = nn.CrossEntropyLoss()(logits, labels)
+    loss.backward()  # Accumulate gradients
+
+model.train() # enter training
+
 # Training Loop Handling Different Sentences for Each Task
-model.train()
-for epoch in range(3):  # Example: 3 epochs
+for epoch in range(10):  # Example: 3 epochs
     for (batch1, batch2) in zip(dataloader_task1, dataloader_task2):
-        # Handle Task 1
-        input_ids, attention_mask, labels = [item.to('cpu') for item in batch1]
+
         optimizer.zero_grad()
-        logits_task1 = model(input_ids, attention_mask, task=1)
-        loss_task1 = nn.CrossEntropyLoss()(logits_task1, labels)
-        loss_task1.backward()  # Accumulate gradients
+        # Handle Task 1
+        handle_task(model, optimizer, batch1, 1)
 
         # Handle Task 2
-        input_ids, attention_mask, labels = [item.to('cpu') for item in batch2]
-        logits_task2 = model(input_ids, attention_mask, task=2)
-        loss_task2 = nn.CrossEntropyLoss()(logits_task2, labels)
-        loss_task2.backward()  # Accumulate gradients further
+        handle_task(model, optimizer, batch2, 2)
 
         optimizer.step()  # Perform optimization step for both tasks
 
     print(f"Epoch {epoch+1} completed.")
     
-model.eval()
+model.eval() # enter evaluation/measurements
 
-# Synthetic Test Data for Task 1 (Sentiment Analysis) and Task 2 (Topic Classification)
+# Synthetic Test Data for Task 1 (Claim Detection) and Task 2 (Stance Detection)
 test_sentences_task1 = claim_dev_set.sentences
 test_labels_task1 = claim_dev_set.labels
 
@@ -207,10 +210,11 @@ def evaluate(model, inputs, labels, task):
         predictions = torch.argmax(torch.softmax(logits, dim=1), dim=1)
         accuracy = (predictions == labels).float().mean()
     return accuracy.item()
-# Evaluate Task 1 (Sentiment Analysis)
+
+# Evaluate Task 1 (Claim Detection)
 accuracy_task1 = evaluate(model, test_inputs_task1, test_labels_task1, task=1)
 print(f"Task 1 (Claim Detection) Accuracy: {accuracy_task1:.4f}")
 
-# Evaluate Task 2 (Topic Classification)
+# Evaluate Task 2 (Stance Detection)
 accuracy_task2 = evaluate(model, test_inputs_task2, test_labels_task2, task=2)
 print(f"Task 2 (Stance Detection) Accuracy: {accuracy_task2:.4f}")

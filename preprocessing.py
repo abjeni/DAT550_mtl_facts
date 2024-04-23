@@ -2,6 +2,7 @@ import re
 
 def cleanup_string(string):
     string = string.encode('ascii', 'ignore').decode('ascii')
+    string = re.sub(r'https\:\/\/\S+', '', string)
     return string
 
 def cleanup_object(input):

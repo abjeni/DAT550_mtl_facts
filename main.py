@@ -20,5 +20,5 @@ train_stance_sub = train_stance[["id", "rumor", "label"]]
 train_stance.to_json("data/stance/cleaned_train.json", orient='records', lines=True)
 dev_stance.to_json("data/stance/cleaned_dev.json", orient='records', lines=True)
 
-dev_stance_sub.to_csv("data/stance/cleaned_train.tsv", sep='\t')
-train_stance_sub.to_csv("data/stance/cleaned_dev.tsv", sep='\t')
+dev_stance_sub.to_csv("data/stance/cleaned_dev.tsv", sep='\t')
+train_stance_sub.to_csv("data/stance/cleaned_train.tsv", sep='\t')
