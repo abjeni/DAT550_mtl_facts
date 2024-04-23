@@ -166,15 +166,17 @@ optimizer = optim.Adam(model.parameters(), lr=2e-5)
 
 def handle_task(model, optimizer, batch, task_num):
     input_ids, attention_mask, labels = [item.to(device=gpu) for item in batch]
-    optimizer.zero_grad()
     logits = model(input_ids, attention_mask, task=task_num)
     loss = nn.CrossEntropyLoss()(logits, labels)
     loss.backward()  # Accumulate gradients
 
+model.train() # enter training
+
 # Training Loop Handling Different Sentences for Each Task
-model.train()
-for epoch in range(3):  # Example: 3 epochs
+for epoch in range(10):  # Example: 3 epochs
     for (batch1, batch2) in zip(dataloader_task1, dataloader_task2):
+
+        optimizer.zero_grad()
         # Handle Task 1
         handle_task(model, optimizer, batch1, 1)
 
@@ -185,9 +187,9 @@ for epoch in range(3):  # Example: 3 epochs
 
     print(f"Epoch {epoch+1} completed.")
     
-model.eval()
+model.eval() # enter evaluation/measurements
 
-# Synthetic Test Data for Task 1 (Sentiment Analysis) and Task 2 (Topic Classification)
+# Synthetic Test Data for Task 1 (Claim Detection) and Task 2 (Stance Detection)
 test_sentences_task1 = claim_dev_set.sentences
 test_labels_task1 = claim_dev_set.labels
 
@@ -208,10 +210,11 @@ def evaluate(model, inputs, labels, task):
         predictions = torch.argmax(torch.softmax(logits, dim=1), dim=1)
         accuracy = (predictions == labels).float().mean()
     return accuracy.item()
-# Evaluate Task 1 (Sentiment Analysis)
+
+# Evaluate Task 1 (Claim Detection)
 accuracy_task1 = evaluate(model, test_inputs_task1, test_labels_task1, task=1)
 print(f"Task 1 (Claim Detection) Accuracy: {accuracy_task1:.4f}")
 
-# Evaluate Task 2 (Topic Classification)
+# Evaluate Task 2 (Stance Detection)
 accuracy_task2 = evaluate(model, test_inputs_task2, test_labels_task2, task=2)
 print(f"Task 2 (Stance Detection) Accuracy: {accuracy_task2:.4f}")
