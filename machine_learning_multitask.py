@@ -147,14 +147,6 @@ class TestSet:
 
 class Processor:
     def __init__(self):
-        self.device = (
-            "cuda"
-            if torch.cuda.is_available()
-            else "mps"
-            if torch.backends.mps.is_available()
-            else "cpu"
-        )
-
         self.data = Data()
 
         self.tokenizer = BertTokenizerFast.from_pretrained('bert-base-uncased')
@@ -166,7 +158,7 @@ class Processor:
         self.optimizer = optim.Adam(self.model.parameters(), lr=2e-5)
         
     def handle_task(self, batch, task_num):
-        input_ids, attention_mask, labels = [item.to(device=self.device) for item in batch]
+        input_ids, attention_mask, labels = [item.to("cpu") for item in batch]
         logits = self.model(input_ids, attention_mask, task=task_num)
         loss = nn.CrossEntropyLoss()(logits, labels)
         loss.backward()  # Accumulate gradients
@@ -216,7 +208,7 @@ class Processor:
 
 if __name__ == "__main__":
     processor = Processor()
-    #processor.model_load("model.pt")
-    processor.train_model()
-    processor.model_save("model.pt")
+    processor.model_load("model.pt")
+    #processor.train_model()
+    #processor.model_save("model.pt")
     processor.accuracy_test()
