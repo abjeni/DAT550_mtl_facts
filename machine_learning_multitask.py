@@ -177,12 +177,12 @@ class Processor:
             
         self.model.eval() # exit training
 
-    def evaluate(self, inputs, labels, task_num):
+    def evaluate(self, test_set, task_num):
         self.model.eval()
         with torch.no_grad():
-            logits = self.model(inputs.input_ids, inputs.attention_mask, task=task_num)
+            logits = self.model(test_set.inputs.input_ids, test_set.inputs.attention_mask, task=task_num)
             predictions = torch.argmax(torch.softmax(logits, dim=1), dim=1)
-            accuracy = (predictions == labels).float().mean()
+            accuracy = (predictions == test_set.labels).float().mean()
         return accuracy.item()
 
     def accuracy_test(self):
@@ -190,11 +190,11 @@ class Processor:
         test_task2 = TestSet(self.data.stance_dev_set, self.tokenizer)
 
         # Evaluate Task 1 (Claim Detection)
-        accuracy_task1 = self.evaluate(test_task1.inputs, test_task1.labels, 1)
+        accuracy_task1 = self.evaluate(test_task1, 1)
         print(f"Task 1 (Claim Detection) Accuracy: {accuracy_task1:.4f}")
 
         # Evaluate Task 2 (Stance Detection)
-        accuracy_task2 = self.evaluate(test_task2.inputs, test_task2.labels, 2)
+        accuracy_task2 = self.evaluate(test_task2, 2)
         print(f"Task 2 (Stance Detection) Accuracy: {accuracy_task2:.4f}")
     
     def model_save(self, path):
@@ -209,6 +209,14 @@ class Processor:
 if __name__ == "__main__":
     processor = Processor()
     processor.model_load("model.pt")
+
+    while True:
+        text = input("write a claim: ")
+        print("is this a claim?")
+        inputs = processor.tokenizer([text], return_tensors='pt', padding=True, truncation=True, max_length=512)
+        output = processor.model(inputs.input_ids, inputs.attention_mask, task=1)
+        print(processor.data.claim_train_set.get_label_text(int(torch.argmax(torch.softmax(output, dim=1), dim=1)[0])))
+
     #processor.train_model()
     #processor.model_save("model.pt")
     processor.accuracy_test()
