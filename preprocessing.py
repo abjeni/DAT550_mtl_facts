@@ -5,7 +5,7 @@ def cleanup_string(sentence):
     sentence = sentence.encode('ascii', 'ignore').decode('ascii')
     sentence = re.sub(r'https\:\/\/\S+', '', sentence)
     
-    sentence = sentence.translate(str.maketrans('', '', string.punctuation))
+    #sentence = sentence.translate(str.maketrans('', '', string.punctuation))
     return sentence
 
 def cleanup_object(input):

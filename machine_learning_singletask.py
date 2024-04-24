@@ -102,7 +102,7 @@ class TrainingSet:
         self.dataset = TensorDataset(self.inputs.input_ids, self.inputs.attention_mask, self.labels)
 
         # DataLoaders for each task
-        batch_size = 32
+        batch_size = 16
         self.dataloader = DataLoader(self.dataset, batch_size=batch_size, shuffle=True)
 
 

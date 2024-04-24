@@ -229,11 +229,11 @@ class Processor:
 
             is_fact = False
 
-            if is_fact == "REFUTES":
+            if stance_result == "REFUTES":
                 is_fact = False
-            if is_fact == "SUPPORTS":
+            if stance_result == "SUPPORTS":
                 is_fact = True
-            if is_fact == "NOT ENOUGH INFO":
+            if stance_result == "NOT ENOUGH INFO":
                 is_fact = None
             
             if not is_claim:
